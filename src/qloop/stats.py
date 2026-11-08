@@ -100,7 +100,7 @@ def items_needed(p: float, delta: float, alpha: float = 0.05, power: float = 0.8
     za, zb = norm.ppf(1 - alpha / 2), norm.ppf(power)
     q = p + delta
     var = p * (1 - p) + q * (1 - q)
-    return int(math.ceil((za + zb) ** 2 * var / delta**2))
+    return math.ceil((za + zb) ** 2 * var / delta**2)
 
 
 def tied_groups(names: list[str], scores: dict[str, list[float]], n_boot: int, alpha: float) -> list[list[str]]:

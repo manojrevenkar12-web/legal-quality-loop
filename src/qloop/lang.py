@@ -10,10 +10,52 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-EN_NUM = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
-          "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"]
-DE_NUM = ["null", "ein", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn", "elf", "zwölf",
-          "dreizehn", "vierzehn", "fünfzehn", "sechzehn", "siebzehn", "achtzehn", "neunzehn", "zwanzig"]
+EN_NUM = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+]
+DE_NUM = [
+    "null",
+    "ein",
+    "zwei",
+    "drei",
+    "vier",
+    "fünf",
+    "sechs",
+    "sieben",
+    "acht",
+    "neun",
+    "zehn",
+    "elf",
+    "zwölf",
+    "dreizehn",
+    "vierzehn",
+    "fünfzehn",
+    "sechzehn",
+    "siebzehn",
+    "achtzehn",
+    "neunzehn",
+    "zwanzig",
+]
 
 UNITS = {
     "month": {"en": ("month", "months"), "de": ("Monat", "Monate")},
@@ -27,15 +69,22 @@ ANCHORS = {
     "end_of_month": {"en": "to the end of a calendar month", "de": "zum Ende eines Kalendermonats"},
     "end_of_quarter": {"en": "to the end of a calendar quarter", "de": "zum Ende eines Kalendervierteljahres"},
     "last_day_of_month": {"en": "ending on the last day of a month", "de": "zum letzten Tag eines Monats"},
-    "end_of_year_knowledge": {"en": "running from the end of the year in which the claim arose and the creditor learned of it",
-                              "de": "ab dem Schluss des Jahres, in dem der Anspruch entstand und der Gläubiger davon erfuhr"},
-    "from_knowledge": {"en": "running from when the injured party learned of the damage and the liable person",
-                       "de": "ab Kenntnis von Schaden und Schädiger"},
+    "end_of_year_knowledge": {
+        "en": "running from the end of the year in which the claim arose and the creditor learned of it",
+        "de": "ab dem Schluss des Jahres, in dem der Anspruch entstand und der Gläubiger davon erfuhr",
+    },
+    "from_knowledge": {
+        "en": "running from when the injured party learned of the damage and the liable person",
+        "de": "ab Kenntnis von Schaden und Schädiger",
+    },
     "without_undue_delay": {"en": "without undue delay", "de": "unverzüglich"},
     "extendable_two_months": {"en": "extendable by two further months", "de": "um weitere zwei Monate verlängerbar"},
     "written_form": {"en": "termination requires written form", "de": "die Kündigung bedarf der Schriftform"},
     "no_email": {"en": "an email does not suffice", "de": "eine E-Mail genügt nicht"},
-    "more_than_ten": {"en": "the business must regularly employ more than ten employees", "de": "der Betrieb muss regelmäßig mehr als zehn Arbeitnehmer beschäftigen"},
+    "more_than_ten": {
+        "en": "the business must regularly employ more than ten employees",
+        "de": "der Betrieb muss regelmäßig mehr als zehn Arbeitnehmer beschäftigen",
+    },
     "higher_of": {"en": "whichever is higher", "de": "je nachdem, welcher Betrag höher ist"},
 }
 
@@ -103,8 +152,16 @@ def realise(p: Point, lang: str, words: bool) -> str:
         return f"{num} {unit} {RATE_BASES[base][lang]}"
     if p.kind == "money":
         if lang == "en":
-            return "up to 20 million euros or " + ("four" if words else "4") + " percent of worldwide annual turnover, whichever is higher"
-        return "bis zu 20 Millionen Euro oder " + ("vier" if words else "4") + " Prozent des weltweiten Jahresumsatzes, je nachdem, welcher Betrag höher ist"
+            return (
+                "up to 20 million euros or "
+                + ("four" if words else "4")
+                + " percent of worldwide annual turnover, whichever is higher"
+            )
+        return (
+            "bis zu 20 Millionen Euro oder "
+            + ("vier" if words else "4")
+            + " Prozent des weltweiten Jahresumsatzes, je nachdem, welcher Betrag höher ist"
+        )
     raise ValueError(p)
 
 
@@ -123,7 +180,7 @@ def _number_map() -> dict[str, int]:
         m[w] = i
     for i, w in enumerate(DE_NUM):
         m[w.lower()] = i
-    m.update({"einen": 1, "eine": 1, "einem": 1, "an": 1, "a": 1})
+    m.update({"einen": 1, "eine": 1, "einem": 1})
     return m
 
 
@@ -150,13 +207,21 @@ def extract(text: str) -> set[Point]:
     t = normalise(text)
     found: set[Point] = set()
     for unit, ure in _UNIT_RE.items():
-        for m in re.finditer(r"\b" + _NUM_TOKEN + r"\s+" + ure + r"\b", t):
+        for m in re.finditer(
+            r"\b" + _NUM_TOKEN + r"\s+(?:(?:further|additional|weitere|weiteren)\s+)?" + ure + r"\b", t
+        ):
             n = _to_number(m.group(1))
             if n is not None and n.is_integer():
                 found.add(duration(int(n), unit))
     for base, forms in RATE_BASES.items():
-        pattern = r"\b" + _NUM_TOKEN + r"\s+(?:percentage points|prozentpunkte)\s+" + "(?:" + "|".join(
-            re.escape(normalise(f)) for f in forms.values()) + ")"
+        pattern = (
+            r"\b"
+            + _NUM_TOKEN
+            + r"\s+(?:percentage points|prozentpunkte)\s+"
+            + "(?:"
+            + "|".join(re.escape(normalise(f)) for f in forms.values())
+            + ")"
+        )
         for m in re.finditer(pattern, t):
             n = _to_number(m.group(1))
             if n is not None:

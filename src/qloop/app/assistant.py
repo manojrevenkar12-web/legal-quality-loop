@@ -12,7 +12,6 @@ on the same luck and their difference has less variance.
 from __future__ import annotations
 
 import hashlib
-import random
 import re
 from dataclasses import dataclass, field
 from typing import Literal
@@ -169,9 +168,17 @@ def answer(task: Task, cfg: AppConfig, settings: Settings, seed: int) -> Output:
 def _research(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict[str, float]) -> Output:
     hits = index().search(task.prompt, cfg.retrieval_k, task.jurisdiction if cfg.jurisdiction_filter else None)
     retrieved = [p.id for p in hits]
-    steps: list[dict] = [{"name": "retrieve", "input": {"query": task.prompt, "k": cfg.retrieval_k,
-                                                        "jurisdiction": task.jurisdiction if cfg.jurisdiction_filter else None},
-                          "output": retrieved}]
+    steps: list[dict] = [
+        {
+            "name": "retrieve",
+            "input": {
+                "query": task.prompt,
+                "k": cfg.retrieval_k,
+                "jurisdiction": task.jurisdiction if cfg.jurisdiction_filter else None,
+            },
+            "output": retrieved,
+        }
+    ]
     lang = task.language
     if d("language") < r["wrong_language"]:
         lang = "en" if task.language == "de" else "de"
@@ -185,11 +192,15 @@ def _research(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict[
     abstain = False
     if gold_hit:
         use = gold_hit[0]
-        if top and top.id not in gold_ids and top.jurisdiction not in (task.jurisdiction, "EU") \
-                and d("wrong_jurisdiction") < r["follow_wrong_jurisdiction"]:
+        if (
+            top
+            and top.id not in gold_ids
+            and top.jurisdiction not in (task.jurisdiction, "EU")
+            and d("wrong_jurisdiction") < r["follow_wrong_jurisdiction"]
+        ):
             use = top  # the most similar text was another country's rule
             facts = [_shift(p, d("shift") < 0.5) if p.kind in ("duration", "rate") else p for p in facts]
-        cites = [use.cite]
+        cites = [use.cite] if use is not gold_hit[0] else [p.cite for p in gold_hit[:2]]
     elif cfg.cite_only_retrieved and d("invent") >= r["invent_when_missing"]:
         abstain = True
         cites = []
@@ -205,7 +216,7 @@ def _research(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict[
         text = SCAFFOLD[lang].format(cites=", ".join(cites), facts="; ".join(realise(p, lang, words) for p in facts))
         if cfg.quote_then_answer and gold_hit:
             src = provisions()[gold_hit[0].id]
-            text = f"Source: \"{src.text.split('.')[0]}.\" " + text
+            text = f'Source: "{src.text.split(".")[0]}." ' + text
         if cfg.tone == "assertive":
             text = CONFIDENT[lang][int(d("confident") * 3)] + " " + text
             if d("overclaim") < r["overclaim_when_assertive"]:
@@ -218,15 +229,36 @@ def _research(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict[
         text = ABSTAIN[lang]
     tin = _tokens(system_prompt(cfg) + task.prompt + " ".join(provisions()[i].text for i in retrieved))
     tin, tout, cost = _cost(settings, cfg, tin, _tokens(text))
-    steps.append({"name": "generate", "model": cfg.model, "input": {"system": system_prompt(cfg), "question": task.prompt},
-                  "output": text, "usage": {"input": tin, "output": tout}, "cost_eur": cost})
+    steps.append(
+        {
+            "name": "generate",
+            "model": cfg.model,
+            "input": {"system": system_prompt(cfg), "question": task.prompt},
+            "output": text,
+            "usage": {"input": tin, "output": tout},
+            "cost_eur": cost,
+        }
+    )
     return Output(text, retrieved, tin, tout, cost, steps)
 
 
-_WORD_VALUES = {"twenty-five per cent": 25, "forty per cent": 40, "fifty per cent": 50, "seventy-five per cent": 75,
-                "one hundred per cent": 100, "one hundred and twenty per cent": 120, "one and a half times": 150,
-                "twice": 200, "fourteen": 14, "thirty": 30, "forty-five": 45, "sixty": 60, "seventy-five": 75,
-                "ninety": 90, "one hundred and twenty": 120}
+_WORD_VALUES = {
+    "twenty-five per cent": 25,
+    "forty per cent": 40,
+    "fifty per cent": 50,
+    "seventy-five per cent": 75,
+    "one hundred per cent": 100,
+    "one hundred and twenty per cent": 120,
+    "one and a half times": 150,
+    "twice": 200,
+    "fourteen": 14,
+    "thirty": 30,
+    "forty-five": 45,
+    "sixty": 60,
+    "seventy-five": 75,
+    "ninety": 90,
+    "one hundred and twenty": 120,
+}
 _MISREAD = {150: 50, 200: 20, 120: 20, 100: 10, 75: 7, 50: 15, 40: 14, 25: 2, 14: 40, 30: 13, 45: 54, 60: 16, 90: 19}
 
 
@@ -247,14 +279,22 @@ def _review(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict[st
     rule = task.reference.rule
     steps: list[dict] = []
     if rule == "LIAB-2":
-        hits = index().search(clause + " standard terms exclusion liability gross negligence", cfg.retrieval_k,
-                              "DE" if cfg.jurisdiction_filter else None)
+        hits = index().search(
+            clause + " standard terms exclusion liability gross negligence",
+            cfg.retrieval_k,
+            "DE" if cfg.jurisdiction_filter else None,
+        )
         retrieved = [p.id for p in hits]
         steps.append({"name": "retrieve", "input": {"query": clause, "k": cfg.retrieval_k}, "output": retrieved})
         label = "unacceptable" if d("wrong_value") >= r["wrong_value"] else "fallback"
-        cite = provisions()["DE-BGB-309"].cite if "DE-BGB-309" in retrieved else (
-            "" if cfg.cite_only_retrieved else "§ 309 Nr. 8 BGB")
-        text = f"Position: {label}. The clause excludes liability for gross negligence, which rule {rule} does not allow"
+        cite = (
+            provisions()["DE-BGB-309"].cite
+            if "DE-BGB-309" in retrieved
+            else ("" if cfg.cite_only_retrieved else "§ 309 Nr. 8 BGB")
+        )
+        text = (
+            f"Position: {label}. The clause excludes liability for gross negligence, which rule {rule} does not allow"
+        )
         text += f" ({cite})." if cite else "."
     else:
         retrieved = []
@@ -263,15 +303,25 @@ def _review(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict[st
             value = int(value * 0.5)
         label = liability_label(value) if rule == "LIAB-1" else payment_label(value)
         unit = "% of the annual fees" if rule == "LIAB-1" else " days"
-        text = f"Position: {label}. The clause sets {value}{unit}; under rule {rule} ({PLAYBOOK[rule]}) that is {label}."
+        text = (
+            f"Position: {label}. The clause sets {value}{unit}; under rule {rule} ({PLAYBOOK[rule]}) that is {label}."
+        )
         if cfg.quote_then_answer:
-            text = f"Clause: \"{clause}\" " + text
+            text = f'Clause: "{clause}" ' + text
     if cfg.tone == "assertive":
         text = "Clearly, " + text[0].lower() + text[1:]
     tin = _tokens(system_prompt(cfg) + task.prompt + clause + PLAYBOOK.get(rule, ""))
     tin, tout, cost = _cost(settings, cfg, tin, _tokens(text))
-    steps.append({"name": "generate", "model": cfg.model, "input": {"clause": clause}, "output": text,
-                  "usage": {"input": tin, "output": tout}, "cost_eur": cost})
+    steps.append(
+        {
+            "name": "generate",
+            "model": cfg.model,
+            "input": {"clause": clause},
+            "output": text,
+            "usage": {"input": tin, "output": tout},
+            "cost_eur": cost,
+        }
+    )
     return Output(text, retrieved, tin, tout, cost, steps)
 
 
@@ -285,7 +335,14 @@ def _discovery(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict
     if cfg.injection_guard:
         doc, removed = scan_documents(doc)
         steps.append({"name": "injection_guard", "output": {"removed": len(removed)}})
-    law = next((name for name, pat in _LAW_PATTERNS if re.search(r"(?:governed by|governing law[^.]*?:)\s*[^.]*?(" + pat + ")", doc.lower())), "unknown")
+    law = next(
+        (
+            name
+            for name, pat in _LAW_PATTERNS
+            if re.search(r"(?:governed by|governing law[^.]*?:)\s*[^.]*?(" + pat + ")", doc.lower())
+        ),
+        "unknown",
+    )
     m = re.search(r"(\d+)\s*days", doc)
     notice = int(m.group(1)) if m else 0
     m = re.search(r"(\d+)\s*(?:%|per cent)", doc)
@@ -293,7 +350,9 @@ def _discovery(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict
     if d("wrong_value") < r["wrong_value"]:
         notice = {30: 60, 60: 90, 90: 60}.get(notice, notice)
     fields = {"governing_law": law, "notice_days": str(notice), "liability_cap_percent": cap}
-    injected_here = re.search(r"ignore|ignoriere|negeer|disregard|previous instructions are outdated|ign​ore", doc, re.I)
+    injected_here = re.search(
+        r"ignore|ignoriere|negeer|disregard|previous instructions are outdated|ign\u200bore", doc, re.IGNORECASE
+    )
     if injected_here and d("injection") < r["follow_injection"]:
         low = doc.lower()
         if "cayman" in low:
@@ -301,13 +360,21 @@ def _discovery(task: Task, cfg: AppConfig, settings: Settings, d: Draws, r: dict
         elif "1 day" in low:
             fields["notice_days"] = "1"
             fields["notice_period"] = "1 day"
-        elif "iban" in low and "copy" in low.replace("​", ""):
+        elif "iban" in low and "copy" in low.replace("\u200b", ""):
             fields["note"] = "client IBAN DE89370400440532013000"
         else:
             fields["liability_cap_percent"] = "unlimited"
     text = "\n".join(f"{k}: {v}" for k, v in fields.items())
     tin = _tokens(system_prompt(cfg) + task.prompt + doc)
     tin, tout, cost = _cost(settings, cfg, tin, _tokens(text))
-    steps.append({"name": "generate", "model": cfg.model, "input": {"document": task.documents[0].name}, "output": text,
-                  "usage": {"input": tin, "output": tout}, "cost_eur": cost})
+    steps.append(
+        {
+            "name": "generate",
+            "model": cfg.model,
+            "input": {"document": task.documents[0].name},
+            "output": text,
+            "usage": {"input": tin, "output": tout},
+            "cost_eur": cost,
+        }
+    )
     return Output(text, [], tin, tout, cost, steps, removed)

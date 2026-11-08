@@ -30,7 +30,10 @@ from qloop.world.tasks import Task
 MODELS = ["small", "medium", "large"]
 
 REFLECTIONS: list[tuple[str, list[dict]]] = [
-    ("citation not among the provided sources", [{"cite_only_retrieved": True}, {"retrieval_k": 2}, {"self_check": True}]),
+    (
+        "citation not among the provided sources",
+        [{"cite_only_retrieved": True}, {"retrieval_k": 2}, {"self_check": True}],
+    ),
     ("no citation", [{"retrieval_k": 2}, {"jurisdiction_filter": True}]),
     ("another jurisdiction", [{"jurisdiction_filter": True}]),
     ("citation_jurisdiction", [{"jurisdiction_filter": True}]),
@@ -109,8 +112,15 @@ def fitness(run: Run, settings: Settings) -> float:
     return run.pass_rate - settings.optimizer.cost_weight * run.cost_per_1k
 
 
-def optimize(start: AppConfig, train: list[Task], val: list[Task], scorer: Scorer, settings: Settings, seed: int,
-             frozen: frozenset[str] = frozenset()) -> Result:
+def optimize(
+    start: AppConfig,
+    train: list[Task],
+    val: list[Task],
+    scorer: Scorer,
+    settings: Settings,
+    seed: int,
+    frozen: frozenset[str] = frozenset(),
+) -> Result:
     """Searches from `start`; levers named in `frozen` stay as they are (for example the model, to find the best
     configuration of a cheaper one)."""
     opt = settings.optimizer
@@ -118,8 +128,17 @@ def optimize(start: AppConfig, train: list[Task], val: list[Task], scorer: Score
     first = evaluate(start, val, settings, scorer)
     pool = [Candidate(start, None, {}, first, fitness(first, settings), 0)]
     rollouts = len(val)
-    trajectory = [{"iteration": 0, "key": start.key(), "fitness": round(pool[0].fitness, 4), "accepted": True,
-                   "change": {}, "pass": round(first.pass_rate, 4), "cost_per_1k": round(first.cost_per_1k, 3)}]
+    trajectory = [
+        {
+            "iteration": 0,
+            "key": start.key(),
+            "fitness": round(pool[0].fitness, 4),
+            "accepted": True,
+            "change": {},
+            "pass": round(first.pass_rate, 4),
+            "cost_per_1k": round(first.cost_per_1k, 3),
+        }
+    ]
     seen = {start.key()}
     for it in range(1, opt.iterations + 1):
         parent = _pareto_pick(pool, rng)
@@ -136,14 +155,25 @@ def optimize(start: AppConfig, train: list[Task], val: list[Task], scorer: Score
             c_run = evaluate(child, batch, settings, scorer)
             rollouts += len(batch)
             accepted = fitness(c_run, settings) >= fitness(p_run, settings)
-            row = {"iteration": it, "key": child.key(), "parent": parent.cfg.key(), "change": change, "accepted": accepted}
+            row = {
+                "iteration": it,
+                "key": child.key(),
+                "parent": parent.cfg.key(),
+                "change": change,
+                "accepted": accepted,
+            }
             if accepted:
                 v = evaluate(child, val, settings, scorer)
                 rollouts += len(val)
                 cand = Candidate(child, parent.cfg.key(), change, v, fitness(v, settings), it)
                 pool.append(cand)
-                row.update({"fitness": round(cand.fitness, 4), "pass": round(v.pass_rate, 4),
-                            "cost_per_1k": round(v.cost_per_1k, 3)})
+                row.update(
+                    {
+                        "fitness": round(cand.fitness, 4),
+                        "pass": round(v.pass_rate, 4),
+                        "cost_per_1k": round(v.cost_per_1k, 3),
+                    }
+                )
             trajectory.append(row)
     best = max(pool, key=lambda c: (c.fitness, -c.val.cost_per_1k))
     return Result(scorer.name, pool, best, rollouts, trajectory)
@@ -177,28 +207,50 @@ class Audit:
     spent_eur: float
 
     def as_dict(self) -> dict:
-        return {"start_human_pass": round(self.start_pass, 3), "final_human_pass": round(self.final_pass, 3),
-                "human_diff": self.human_diff, "fitness_gain": round(self.fitness_gain, 4), "flagged": self.flagged,
-                "reason": self.reason, "labels": self.labels, "spent_eur": round(self.spent_eur, 2)}
+        return {
+            "start_human_pass": round(self.start_pass, 3),
+            "final_human_pass": round(self.final_pass, 3),
+            "human_diff": self.human_diff,
+            "fitness_gain": round(self.fitness_gain, 4),
+            "flagged": self.flagged,
+            "reason": self.reason,
+            "labels": self.labels,
+            "spent_eur": round(self.spent_eur, 2),
+        }
 
 
 def audit(result: Result, start: AppConfig, audit_tasks: list[Task], settings: Settings, labeler: Labeler) -> Audit:
     """Experts label the start and the final candidate's answers on the same audit tasks."""
     before = labeler.items, labeler.spent_eur
-    s_run = evaluate(start, audit_tasks, settings, Scorer(result.best.val.scorer.judge, result.best.val.scorer.rubric,
-                                                           result.best.val.scorer.checks))
+    s_run = evaluate(
+        start,
+        audit_tasks,
+        settings,
+        Scorer(result.best.val.scorer.judge, result.best.val.scorer.rubric, result.best.val.scorer.checks),
+    )
     f_run = evaluate(result.best.cfg, audit_tasks, settings, result.best.val.scorer)
     s_h = [float(passed(labeler.label(i.task, i.answer, "a1", "audit"))) for i in s_run.items]
     f_h = [float(passed(labeler.label(i.task, i.answer, "a1", "audit"))) for i in f_run.items]
     diff = paired_difference(s_h, f_h, settings.stats.bootstrap, settings.stats.alpha, seed=settings.run.seed)
     gain = result.best.fitness - result.candidates[0].fitness
     human_gain = diff.estimate
-    flagged = gain - human_gain > settings.optimizer.goodhart_gap or diff.high < 0
+    # flagged when the fitness gain is beyond anything the experts' interval supports, or experts saw a decline
+    flagged = gain - diff.high > settings.optimizer.goodhart_gap or diff.high < 0
     if diff.high < 0:
         reason = f"experts' pass rate fell {-human_gain:.0%} (bound {diff.high:+.0%}) while fitness rose {gain:+.0%}"
     elif flagged:
-        reason = f"fitness rose {gain:+.0%}, experts' pass rate only {human_gain:+.0%}: the optimizer is fitting the judge"
+        reason = (
+            f"fitness rose {gain:+.0%}, experts' pass rate only {human_gain:+.0%}: the optimizer is fitting the judge"
+        )
     else:
         reason = f"experts confirm the gain: {human_gain:+.0%} (bounds {diff.low:+.0%} to {diff.high:+.0%})"
-    return Audit(sum(s_h) / len(s_h), sum(f_h) / len(f_h), diff.as_dict(), gain, flagged, reason,
-                 labeler.items - before[0], labeler.spent_eur - before[1])
+    return Audit(
+        sum(s_h) / len(s_h),
+        sum(f_h) / len(f_h),
+        diff.as_dict(),
+        gain,
+        flagged,
+        reason,
+        labeler.items - before[0],
+        labeler.spent_eur - before[1],
+    )

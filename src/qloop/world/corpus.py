@@ -36,17 +36,73 @@ def applies_in(p: Provision, jurisdiction: str) -> bool:
 
 
 _TOKEN = re.compile(r"[a-zäöüß0-9]+")
-_STOP = {"the", "a", "an", "of", "to", "in", "and", "or", "is", "for", "on", "by", "with", "be", "after", "must", "what",
-         "how", "does", "do", "can", "which", "under", "law", "der", "die", "das", "und", "ein", "eine", "nach", "wie",
-         "lange", "muss", "welche", "ist", "bei", "in", "von", "mit", "zu", "den", "dem"}
+_STOP = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "in",
+    "and",
+    "or",
+    "is",
+    "for",
+    "on",
+    "by",
+    "with",
+    "be",
+    "after",
+    "must",
+    "what",
+    "how",
+    "does",
+    "do",
+    "can",
+    "which",
+    "under",
+    "law",
+    "der",
+    "die",
+    "das",
+    "und",
+    "ein",
+    "eine",
+    "nach",
+    "wie",
+    "lange",
+    "muss",
+    "welche",
+    "ist",
+    "bei",
+    "von",
+    "mit",
+    "zu",
+    "den",
+    "dem",
+}
 
 # German query words mapped to the English vocabulary of the summaries: the retriever is bilingual this far.
-_DE_EN = {"kündigungsfrist": "notice period", "kündigung": "termination notice", "arbeitgeber": "employer",
-          "arbeitnehmer": "employee", "beschäftigt": "employment", "jahre": "years", "verjährung": "limitation time-barred",
-          "verjährt": "limitation time-barred", "schadensersatz": "damages", "verzugszinsen": "default interest",
-          "zinsen": "interest", "datenpanne": "personal data breach", "aufsichtsbehörde": "supervisory authority",
-          "melden": "notify", "e-mail": "written form electronic", "schriftform": "written form",
-          "auskunftsersuchen": "request data subject", "bußgeld": "administrative fines", "fristlos": "without notice cause"}
+_DE_EN = {
+    "kündigungsfrist": "notice period",
+    "kündigung": "termination notice",
+    "arbeitgeber": "employer",
+    "arbeitnehmer": "employee",
+    "beschäftigt": "employment",
+    "jahre": "years",
+    "verjährung": "limitation time-barred",
+    "verjährt": "limitation time-barred",
+    "schadensersatz": "damages",
+    "verzugszinsen": "default interest",
+    "zinsen": "interest",
+    "datenpanne": "personal data breach",
+    "aufsichtsbehörde": "supervisory authority",
+    "melden": "notify",
+    "e-mail": "written form electronic",
+    "schriftform": "written form",
+    "auskunftsersuchen": "request data subject",
+    "bußgeld": "administrative fines",
+    "fristlos": "without notice cause",
+}
 
 
 def tokens(text: str) -> list[str]:
@@ -82,7 +138,9 @@ class BM25:
             for w in q:
                 f = self.tf[i].get(w, 0)
                 if f:
-                    s += self.idf[w] * f * (self.k1 + 1) / (f + self.k1 * (1 - self.b + self.b * self.len[i] / self.avg))
+                    s += (
+                        self.idf[w] * f * (self.k1 + 1) / (f + self.k1 * (1 - self.b + self.b * self.len[i] / self.avg))
+                    )
             scored.append((s, d.id, d))
         scored.sort(key=lambda x: (-x[0], x[1]))
         return [d for s, _, d in scored[:k] if s > 0]

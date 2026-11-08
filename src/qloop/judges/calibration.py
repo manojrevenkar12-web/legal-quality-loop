@@ -73,11 +73,22 @@ class Report:
         return f"judge-{self.judge}/{self.rubric}" + ("+checks" if self.with_checks else "")
 
     def as_dict(self) -> dict:
-        return {"name": self.name, "judge": self.judge, "rubric": self.rubric, "with_checks": self.with_checks,
-                "agreement": round(self.agreement, 3), "kappa": round(self.kappa, 3), "judge_pass": round(self.judge_pass, 3),
-                "human_pass": round(self.human_pass, 3), "false_pass": self.false_pass, "false_fail": self.false_fail,
-                "long_bias": round(self.long_bias, 3), "criteria_kappa": {k: round(v, 3) for k, v in self.criteria_kappa.items()},
-                "cost_eur": round(self.cost_eur, 4), "n": self.n}
+        return {
+            "name": self.name,
+            "judge": self.judge,
+            "rubric": self.rubric,
+            "with_checks": self.with_checks,
+            "agreement": round(self.agreement, 3),
+            "kappa": round(self.kappa, 3),
+            "judge_pass": round(self.judge_pass, 3),
+            "human_pass": round(self.human_pass, 3),
+            "false_pass": self.false_pass,
+            "false_fail": self.false_fail,
+            "long_bias": round(self.long_bias, 3),
+            "criteria_kappa": {k: round(v, 3) for k, v in self.criteria_kappa.items()},
+            "cost_eur": round(self.cost_eur, 4),
+            "n": self.n,
+        }
 
 
 def evaluate_judge(samples: list[Sample], tier: str, rubric: str, with_checks: bool, settings: Settings) -> Report:
@@ -105,24 +116,48 @@ def evaluate_judge(samples: list[Sample], tier: str, rubric: str, with_checks: b
                 crit[k][0].append(v)
                 crit[k][1].append(s.human[k])
     n = len(samples)
-    mean = lambda x: sum(x) / len(x) if x else 0.0  # noqa: E731
-    return Report(tier, rubric, with_checks, sum(a == b for a, b in zip(jp, hp)) / n, cohen_kappa(jp, hp), mean(jp), mean(hp),
-                  sum(1 for a, b in zip(jp, hp) if a and not b), sum(1 for a, b in zip(jp, hp) if b and not a),
-                  mean(long_d) - mean(short_d), {k: cohen_kappa(a, b) for k, (a, b) in crit.items()}, cost, n)
+    mean = lambda x: sum(x) / len(x) if x else 0.0
+    return Report(
+        tier,
+        rubric,
+        with_checks,
+        sum(a == b for a, b in zip(jp, hp)) / n,
+        cohen_kappa(jp, hp),
+        mean(jp),
+        mean(hp),
+        sum(1 for a, b in zip(jp, hp) if a and not b),
+        sum(1 for a, b in zip(jp, hp) if b and not a),
+        mean(long_d) - mean(short_d),
+        {k: cohen_kappa(a, b) for k, (a, b) in crit.items()},
+        cost,
+        n,
+    )
 
 
 def human_agreement(samples: list[Sample]) -> dict:
     pairs = [(passed(s.human), passed(s.second)) for s in samples if s.second is not None]
     a, b = [x for x, _ in pairs], [y for _, y in pairs]
-    return {"n": len(pairs), "agreement": round(sum(x == y for x, y in pairs) / max(1, len(pairs)), 3),
-            "kappa": round(cohen_kappa(a, b), 3)}
+    return {
+        "n": len(pairs),
+        "agreement": round(sum(x == y for x, y in pairs) / max(1, len(pairs)), 3),
+        "kappa": round(cohen_kappa(a, b), 3),
+    }
 
 
 def calibrate(samples: list[Sample], settings: Settings) -> dict:
-    reports = [evaluate_judge(samples, t, r, chk, settings) for t, r in JUDGES for chk in ((False, True) if r == "v2" else (False,))]
+    reports = [
+        evaluate_judge(samples, t, r, chk, settings)
+        for t, r in JUDGES
+        for chk in ((False, True) if r == "v2" else (False,))
+    ]
     trusted = [r for r in reports if r.kappa >= settings.calibration.min_kappa]
-    best = max(trusted, key=lambda r: (r.kappa, -r.cost_eur)) if trusted else None
+    best = max(trusted, key=lambda r: (round(r.kappa, 3), r.with_checks, -r.cost_eur)) if trusted else None
     human_rate: Interval = wilson(sum(passed(s.human) for s in samples), len(samples))
-    return {"reports": [r.as_dict() for r in reports], "selected": best.name if best else None,
-            "min_kappa": settings.calibration.min_kappa, "humans": human_agreement(samples),
-            "human_pass": human_rate.as_dict(), "n": len(samples)}
+    return {
+        "reports": [r.as_dict() for r in reports],
+        "selected": best.name if best else None,
+        "min_kappa": settings.calibration.min_kappa,
+        "humans": human_agreement(samples),
+        "human_pass": human_rate.as_dict(),
+        "n": len(samples),
+    }

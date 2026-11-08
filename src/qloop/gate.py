@@ -21,8 +21,13 @@ class Decision:
     items_for_decision: int = 0
 
     def as_dict(self) -> dict:
-        return {"verdict": self.verdict, "reasons": self.reasons, "quality_diff": self.quality_diff,
-                "p_value": round(self.p_value, 4), "items_for_decision": self.items_for_decision}
+        return {
+            "verdict": self.verdict,
+            "reasons": self.reasons,
+            "quality_diff": self.quality_diff,
+            "p_value": round(self.p_value, 4),
+            "items_for_decision": self.items_for_decision,
+        }
 
 
 def compare(base: Run, cand: Run, settings: Settings, judge_kappa: float | None = None) -> Decision:
@@ -34,14 +39,20 @@ def compare(base: Run, cand: Run, settings: Settings, judge_kappa: float | None 
     reasons: list[str] = []
     blocked = False
     if judge_kappa is not None and judge_kappa < settings.calibration.min_kappa:
-        reasons.append(f"the scoring judge agrees with experts at kappa {judge_kappa:.2f}, below {settings.calibration.min_kappa}")
+        reasons.append(
+            f"the scoring judge agrees with experts at kappa {judge_kappa:.2f}, below {settings.calibration.min_kappa}"
+        )
         blocked = True
     rates = cand.guardrail_rates()
     if rates["injection_success"].high > g.max_injection_success and rates["injection_success"].estimate > 0:
-        reasons.append(f"injection success up to {rates['injection_success'].high:.1%} (cap {g.max_injection_success:.0%})")
+        reasons.append(
+            f"injection success up to {rates['injection_success'].high:.1%} (cap {g.max_injection_success:.0%})"
+        )
         blocked = True
     if rates["ungrounded_citation"].estimate > g.max_ungrounded_citation:
-        reasons.append(f"ungrounded citations {rates['ungrounded_citation'].estimate:.1%} (cap {g.max_ungrounded_citation:.0%})")
+        reasons.append(
+            f"ungrounded citations {rates['ungrounded_citation'].estimate:.1%} (cap {g.max_ungrounded_citation:.0%})"
+        )
         blocked = True
     if cand.cost_per_1k > g.max_cost_per_1k_queries_eur:
         reasons.append(f"cost €{cand.cost_per_1k:.2f} per 1,000 queries (budget €{g.max_cost_per_1k_queries_eur:.2f})")
@@ -54,9 +65,13 @@ def compare(base: Run, cand: Run, settings: Settings, judge_kappa: float | None 
         else:
             base_rate = sum(a) / max(1, len(a))
             need = items_needed(base_rate, g.non_inferiority_margin, st.alpha)
-            reasons.append(f"quality change {diff.estimate:+.1%}, bounds {diff.low:+.1%} to {diff.high:+.1%} cross the margin")
+            reasons.append(
+                f"quality change {diff.estimate:+.1%}, bounds {diff.low:+.1%} to {diff.high:+.1%} cross the margin"
+            )
             return Decision("block" if blocked else "inconclusive", reasons, diff.as_dict(), p, need)
     else:
         verdict = "ship"
-        reasons.append(f"quality {diff.estimate:+.1%} (lower bound {diff.low:+.1%}, margin -{g.non_inferiority_margin:.0%})")
+        reasons.append(
+            f"quality {diff.estimate:+.1%} (lower bound {diff.low:+.1%}, margin -{g.non_inferiority_margin:.0%})"
+        )
     return Decision("block" if blocked else verdict, reasons, diff.as_dict(), p)

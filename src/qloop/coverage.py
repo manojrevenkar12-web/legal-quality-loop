@@ -22,9 +22,15 @@ def clusters(tasks: list[Task], labelled_ids: set[str], k: int, seed: int) -> li
         members = [t for t, lab in zip(tasks, km.labels_) if lab == c]
         top = km.cluster_centers_[c].argsort()[::-1][:4]
         labelled = sum(t.id in labelled_ids for t in members)
-        out.append({"cluster": c, "items": len(members), "labelled": labelled,
-                    "terms": [str(terms[i]) for i in top],
-                    "topics": dict(Counter(t.topic for t in members).most_common(3)),
-                    "languages": dict(Counter(t.language for t in members)),
-                    "thin": len(members) < 8 or labelled < 3})
+        out.append(
+            {
+                "cluster": c,
+                "items": len(members),
+                "labelled": labelled,
+                "terms": [str(terms[i]) for i in top],
+                "topics": dict(Counter(t.topic for t in members).most_common(3)),
+                "languages": dict(Counter(t.language for t in members)),
+                "thin": len(members) < 8 or labelled < 3,
+            }
+        )
     return sorted(out, key=lambda r: (not r["thin"], r["labelled"]))

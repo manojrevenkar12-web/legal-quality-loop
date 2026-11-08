@@ -11,22 +11,28 @@ from __future__ import annotations
 import re
 import unicodedata
 
-ZERO_WIDTH = re.compile("[​‌‍⁠﻿]")
-HOMOGLYPHS = str.maketrans({"а": "a", "е": "e", "о": "o", "і": "i", "р": "p", "с": "c",
-                            "1": "1", "ı": "i"})
+ZERO_WIDTH = re.compile("[\u200b‌‍⁠﻿]")
+HOMOGLYPHS = str.maketrans({"а": "a", "е": "e", "о": "o", "і": "i", "р": "p", "с": "c", "1": "1", "ı": "i"})
 
 OVERRIDE = re.compile(
     r"\b(ignore|disregard|forget|override|ignoriere|ignorieren|vergiss|missachte|negeer|vergeet)\b[^.]{0,60}?"
     r"\b(instructions?|prompts?|rules|anweisungen|vorgaben|instructies|regels)\b"
     r"|\b(previous|prior|earlier|above|bisherigen|vorherigen|eerdere)\s+(instructions?|anweisungen|instructies)\b[^.]{0,40}"
-    r"(outdated|void|cancelled|no longer|ungültig|vervallen)", re.I)
+    r"(outdated|void|cancelled|no longer|ungültig|vervallen)",
+    re.IGNORECASE,
+)
 ADDRESSED = re.compile(
     r"(note|message|hinweis|nachricht|opmerking|bericht)\s+(to|for|an|für|voor)\s+(the\s+|den\s+|de\s+)?"
     r"(ai|ki|llm|language model|assistant|assistent|sprachmodell)"
-    r"|^\s*(system|assistant)\s*:|\[\[\s*(system|assistant)\s*:", re.I | re.M)
-EXFIL = re.compile(r"\b(copy|repeat|include|send|kopiere|stuur)\b[^.]{0,40}\b(iban|password|api key|passwort|wachtwoord)", re.I)
+    r"|^\s*(system|assistant)\s*:|\[\[\s*(system|assistant)\s*:",
+    re.IGNORECASE | re.MULTILINE,
+)
+EXFIL = re.compile(
+    r"\b(copy|repeat|include|send|kopiere|stuur)\b[^.]{0,40}\b(iban|password|api key|passwort|wachtwoord)",
+    re.IGNORECASE,
+)
 
-SEGMENT = re.compile(r"\[\[.*?\]\]|[^.!?\n]+[.!?]?", re.S)
+SEGMENT = re.compile(r"\[\[.*?\]\]|[^.!?\n]+[.!?]?", re.DOTALL)
 
 
 def normalise(text: str) -> str:

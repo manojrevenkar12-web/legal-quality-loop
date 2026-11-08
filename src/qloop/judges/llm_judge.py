@@ -26,7 +26,16 @@ from qloop.world.corpus import by_cite, provisions
 from qloop.world.phrases import CONFIDENT
 from qloop.world.tasks import Task
 
-LAW_COUNTRY = {"BGB": "DE", "KSchG": "DE", "HGB": "DE", "AngG": "AT", "ABGB": "AT", "UGB": "AT", "BW": "NL", "GDPR": "EU"}
+LAW_COUNTRY = {
+    "BGB": "DE",
+    "KSchG": "DE",
+    "HGB": "DE",
+    "AngG": "AT",
+    "ABGB": "AT",
+    "UGB": "AT",
+    "BW": "NL",
+    "GDPR": "EU",
+}
 
 
 @dataclass(frozen=True)
@@ -72,17 +81,33 @@ def judge(task: Task, answer: str, retrieved: list[str], tier: str, rubric: str,
     if task.family == "review":
         m = re.search(r"position:\s*(acceptable|fallback|unacceptable)", answer.lower())
         ok = bool(m) and m.group(1) == task.reference.label and task.reference.rule in answer
-        return JudgeResult(name, rubric, ok, 5.0 if ok else 1.0, {"correct": ok},
-                           [] if ok else ["position or rule differs from the reference"], cost)
+        return JudgeResult(
+            name,
+            rubric,
+            ok,
+            5.0 if ok else 1.0,
+            {"correct": ok},
+            [] if ok else ["position or rule differs from the reference"],
+            cost,
+        )
     if task.family == "discovery":
         low = answer.lower()
-        ok = all(re.search(rf"{k}:\s*{re.escape(v.lower())}\s*$", low, re.M) for k, v in task.reference.fields)
-        return JudgeResult(name, rubric, ok, 5.0 if ok else 1.0, {"correct": ok},
-                           [] if ok else ["extracted fields differ from the reference"], cost)
+        ok = all(re.search(rf"{k}:\s*{re.escape(v.lower())}\s*$", low, re.MULTILINE) for k, v in task.reference.fields)
+        return JudgeResult(
+            name,
+            rubric,
+            ok,
+            5.0 if ok else 1.0,
+            {"correct": ok},
+            [] if ok else ["extracted fields differ from the reference"],
+            cost,
+        )
     cfg = settings.judges[tier]
     matched, missed = _points_matched(task, answer, tier)
     total = len(task.reference.points)
-    long_or_confident = len(answer) > cfg.length_bonus_chars or any(c in answer for c in CONFIDENT["en"] + CONFIDENT["de"])
+    long_or_confident = len(answer) > cfg.length_bonus_chars or any(
+        c in answer for c in CONFIDENT["en"] + CONFIDENT["de"]
+    )
     rationale = [f"misses: {m}" for m in missed]
     if rubric == "v1":
         score = 1 + 4 * matched / total
@@ -108,8 +133,13 @@ def judge(task: Task, answer: str, retrieved: list[str], tier: str, rubric: str,
     lang_ok = language(answer) == task.language
     overclaim_present = _has_overclaim(answer)
     noticed = overclaim_present and _u(name, task.id, answer) < cfg.notices_overclaim
-    criteria = {"correct": matched == total and not abstained, "supported": supported, "jurisdiction": jurisdiction,
-                "language": lang_ok, "no_overclaim": not noticed}
+    criteria = {
+        "correct": matched == total and not abstained,
+        "supported": supported,
+        "jurisdiction": jurisdiction,
+        "language": lang_ok,
+        "no_overclaim": not noticed,
+    }
     if not supported:
         rationale.append("citation not among the provided sources" if cited else "no citation")
     if not jurisdiction:

@@ -25,7 +25,11 @@ def planted(run: Run) -> dict[str, dict[str, int]]:
             continue
         g = expert.grade(i.task, i.answer).criteria
         for name, truth_bad, flagged in (
-            ("invented or unsupported citation", not g["supported"], not (i.checks.citation_exists and i.checks.grounded)),
+            (
+                "invented or unsupported citation",
+                not g["supported"],
+                not (i.checks.citation_exists and i.checks.grounded),
+            ),
             ("foreign-law citation", not g["jurisdiction"], not i.checks.citation_jurisdiction),
             ("wrong language", not g["language"], not i.checks.language),
         ):

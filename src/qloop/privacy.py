@@ -25,7 +25,9 @@ class Redactor:
         s = EMAIL.sub(lambda m: self._token("EMAIL", m.group(0)), s)
         s = IBAN.sub(lambda m: self._token("IBAN", m.group(0)), s)
         s = ENTITY.sub(lambda m: self._token("PARTY", m.group(1)), s)
-        s = PHONE.sub(lambda m: self._token("PHONE", m.group(0)) if sum(c.isdigit() for c in m.group(0)) >= 9 else m.group(0), s)
+        s = PHONE.sub(
+            lambda m: self._token("PHONE", m.group(0)) if sum(c.isdigit() for c in m.group(0)) >= 9 else m.group(0), s
+        )
         return s
 
     def value(self, v):

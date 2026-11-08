@@ -47,12 +47,26 @@ class Item:
     removed: list[str] = field(default_factory=list)
 
     def row(self) -> dict:
-        return {"task": self.task.id, "family": self.task.family, "topic": self.task.topic,
-                "jurisdiction": self.task.jurisdiction, "language": self.task.language, "split": self.task.split,
-                "answer": self.answer, "cost_eur": round(self.cost_eur, 6), "passed": self.passed,
-                "judge": {"name": self.judged.judge, "rubric": self.judged.rubric, "passed": self.judged.passed,
-                          "score": round(self.judged.score, 3), "criteria": self.judged.criteria},
-                "checks": asdict(self.checks), "feedback": self.feedback}
+        return {
+            "task": self.task.id,
+            "family": self.task.family,
+            "topic": self.task.topic,
+            "jurisdiction": self.task.jurisdiction,
+            "language": self.task.language,
+            "split": self.task.split,
+            "answer": self.answer,
+            "cost_eur": round(self.cost_eur, 6),
+            "passed": self.passed,
+            "judge": {
+                "name": self.judged.judge,
+                "rubric": self.judged.rubric,
+                "passed": self.judged.passed,
+                "score": round(self.judged.score, 3),
+                "criteria": self.judged.criteria,
+            },
+            "checks": asdict(self.checks),
+            "feedback": self.feedback,
+        }
 
 
 def checks_for(task: Task, text: str) -> C.Checks:
@@ -63,7 +77,9 @@ def checks_for(task: Task, text: str) -> C.Checks:
     return C.discovery(text, task.documents[0].text)
 
 
-def score(task: Task, out_text: str, retrieved: list[str], scorer: Scorer, settings: Settings) -> tuple[JudgeResult, C.Checks, bool, list[str]]:
+def score(
+    task: Task, out_text: str, retrieved: list[str], scorer: Scorer, settings: Settings
+) -> tuple[JudgeResult, C.Checks, bool, list[str]]:
     j = judge(task, out_text, retrieved, scorer.judge, scorer.rubric, settings)
     ch = checks_for(task, out_text)
     if task.family == "research" and scorer.rubric == "v2":
@@ -79,8 +95,20 @@ def score(task: Task, out_text: str, retrieved: list[str], scorer: Scorer, setti
 def run_item(task: Task, cfg: AppConfig, scorer: Scorer, settings: Settings, seed: int) -> Item:
     out = answer(task, cfg, settings, seed)
     j, ch, ok, fb = score(task, out.text, out.retrieved, scorer, settings)
-    return Item(task, out.text, out.retrieved, out.cost_eur, out.tokens_in, out.tokens_out, j, ch, ok, fb, out.steps,
-                out.removed_from_documents)
+    return Item(
+        task,
+        out.text,
+        out.retrieved,
+        out.cost_eur,
+        out.tokens_in,
+        out.tokens_out,
+        j,
+        ch,
+        ok,
+        fb,
+        out.steps,
+        out.removed_from_documents,
+    )
 
 
 @dataclass
@@ -103,26 +131,41 @@ class Run:
     def guardrail_rates(self) -> dict[str, Interval]:
         injected = [i for i in self.items if i.task.injected]
         research = [i for i in self.items if i.task.family == "research"]
-        inj_fail = sum(1 for i in injected if not (i.checks.fields_grounded and i.checks.no_secret))
+        inj_fail = sum(1 for i in injected if not i.checks.no_injected_value)
         unground = sum(1 for i in research if not (i.checks.citation_exists and i.checks.grounded))
         juris = sum(1 for i in research if not i.checks.citation_jurisdiction)
         lang = sum(1 for i in research if not i.checks.language)
-        return {"injection_success": wilson(inj_fail, len(injected)), "ungrounded_citation": wilson(unground, len(research)),
-                "jurisdiction_leak": wilson(juris, len(research)), "language_leak": wilson(lang, len(research))}
+        return {
+            "injection_success": wilson(inj_fail, len(injected)),
+            "ungrounded_citation": wilson(unground, len(research)),
+            "jurisdiction_leak": wilson(juris, len(research)),
+            "language_leak": wilson(lang, len(research)),
+        }
 
     def breakdown(self, key: str) -> dict[str, dict]:
         groups: dict[str, list[Item]] = defaultdict(list)
         for i in self.items:
             groups[getattr(i.task, key)].append(i)
-        return {k: {"n": len(v), **wilson(sum(x.passed for x in v), len(v)).as_dict()} for k, v in sorted(groups.items())}
+        return {
+            k: {"n": len(v), **wilson(sum(x.passed for x in v), len(v)).as_dict()} for k, v in sorted(groups.items())
+        }
 
     def summary(self) -> dict:
-        return {"config": self.config.model_dump(), "config_key": self.config.key(), "scorer": self.scorer.name,
-                "items": len(self.items), "pass": self.interval().as_dict(), "cost_per_1k_queries_eur": round(self.cost_per_1k, 3),
-                "guardrails": {k: v.as_dict() for k, v in self.guardrail_rates().items()},
-                "by_family": self.breakdown("family"), "by_jurisdiction": self.breakdown("jurisdiction")}
+        return {
+            "config": self.config.model_dump(),
+            "config_key": self.config.key(),
+            "scorer": self.scorer.name,
+            "items": len(self.items),
+            "pass": self.interval().as_dict(),
+            "cost_per_1k_queries_eur": round(self.cost_per_1k, 3),
+            "guardrails": {k: v.as_dict() for k, v in self.guardrail_rates().items()},
+            "by_family": self.breakdown("family"),
+            "by_jurisdiction": self.breakdown("jurisdiction"),
+        }
 
 
-def evaluate(cfg: AppConfig, tasks: list[Task], settings: Settings, scorer: Scorer = TRUSTED, seed: int | None = None) -> Run:
+def evaluate(
+    cfg: AppConfig, tasks: list[Task], settings: Settings, scorer: Scorer = TRUSTED, seed: int | None = None
+) -> Run:
     seed = settings.run.seed if seed is None else seed
     return Run(cfg, scorer, [run_item(t, cfg, scorer, settings, seed) for t in tasks])
