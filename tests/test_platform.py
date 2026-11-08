@@ -84,3 +84,13 @@ def test_config_is_strict(tmp_path):
 
     with pytest.raises(ValidationError):
         load(bad)
+
+
+def test_failure_table_points_at_the_biggest_lever(dev, settings):
+    from qloop.analysis import failure_table
+
+    run = evaluate(AppConfig(model="small"), [t for t in dev if t.family == "research"], settings)
+    table = failure_table(run, "jurisdiction")
+    assert set(table.index) == {"AT", "DE", "NL"}
+    assert table.columns[0] in {"check failed", "cites the law of another jurisdiction", "misses"}
+    assert (table.values >= 0).all() and (table.values <= 1).all()

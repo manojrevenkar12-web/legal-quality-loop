@@ -111,10 +111,11 @@ motion is respected.
 
 ```sh
 pip install -e ".[dev]"
-make check test         # ruff, eslint, 95 Python and 7 dashboard tests, seconds
+make check test         # ruff, eslint, 96 Python and 7 dashboard tests, seconds
 qloop develop           # calibration, landscape, three searches, audits, red team: development set only
 qloop heldout           # the pinned held-out set, once; a second run needs --again and is logged
 qloop report            # reports/results.json, reports/RESULTS.md, this README's numbers
+qloop analyse --config c.json --by topic   # pandas table: which failure reasons cluster where
 qloop serve             # API on :8000; the dashboard: cd web && npm ci && npm run dev
 qloop compare --baseline a.json --candidate b.json   # exit code 0 only when the gate says ship
 ```

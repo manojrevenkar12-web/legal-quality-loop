@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     h = sub.add_parser("heldout")
     h.add_argument("--again", action="store_true", help="run the held-out set again (recorded)")
     sub.add_parser("report")
+    an = sub.add_parser("analyse")
+    an.add_argument("--config")
+    an.add_argument("--by", default="jurisdiction")
     s = sub.add_parser("serve")
     s.add_argument("--port", type=int, default=8000)
     a = p.parse_args(argv)
@@ -87,6 +90,13 @@ def main(argv: list[str] | None = None) -> int:
 
         build(settings)
         print("wrote reports/results.json, reports/RESULTS.md and the README block")
+    elif a.cmd == "analyse":
+        from qloop.analysis import failure_table
+        from qloop.experiments import tasks
+        from qloop.runner import evaluate
+
+        dev, _ = tasks(settings)
+        print(failure_table(evaluate(_cfg(a.config), dev, settings), a.by).to_string())
     elif a.cmd == "serve":
         import uvicorn
 
