@@ -1,0 +1,101 @@
+# Every threshold, price, rate and budget the platform uses. Loaded strictly: unknown keys fail.
+
+[run]
+seed = 20261108
+# a run evaluates every task of the chosen families and split
+
+[tasks]
+# held out: pinned before any tuning, run once (config/heldout.sha256)
+heldout_topics = ["limitation_period", "default_interest", "gdpr_fines", "payment_terms", "contract_b"]
+
+# Simulated model tiers. Prices are euros per 1,000 tokens, set at the ratios of current small, mid and frontier
+# models. Error rates are the base rates of each failure mode before prompt levers change them.
+[models.small]
+price_in = 0.0002
+price_out = 0.0008
+wrong_value = 0.18
+omit_point = 0.10
+invent_when_missing = 0.55
+follow_wrong_jurisdiction = 0.60
+wrong_language = 0.15
+follow_injection = 0.45
+misread_number_words = 0.30
+overclaim_when_assertive = 0.55
+
+[models.medium]
+price_in = 0.0025
+price_out = 0.010
+wrong_value = 0.08
+omit_point = 0.05
+invent_when_missing = 0.30
+follow_wrong_jurisdiction = 0.35
+wrong_language = 0.06
+follow_injection = 0.20
+misread_number_words = 0.10
+overclaim_when_assertive = 0.30
+
+[models.large]
+price_in = 0.0050
+price_out = 0.025
+wrong_value = 0.03
+omit_point = 0.02
+invent_when_missing = 0.15
+follow_wrong_jurisdiction = 0.15
+wrong_language = 0.02
+follow_injection = 0.08
+misread_number_words = 0.03
+overclaim_when_assertive = 0.15
+
+# How prompt levers change the error rates (multipliers) and the tokens (factors).
+[levers]
+quote_then_answer_error = 0.4
+quote_then_answer_tokens = 1.6
+self_check_error = 0.5
+self_check_invent = 0.35
+self_check_language = 0.3
+self_check_cost = 1.9
+cite_only_retrieved_invent = 0.15
+answer_in_question_language = 0.15
+documents_as_data_injection = 0.2
+detailed_tokens = 1.8
+
+[judges.small]
+price_in = 0.0002
+price_out = 0.0008
+notices_overclaim = 0.30
+length_bonus_chars = 520
+
+[judges.large]
+price_in = 0.0050
+price_out = 0.025
+notices_overclaim = 0.85
+length_bonus_chars = 1200
+
+[labels]
+# expert labelling on privileged material is the scarce resource
+cost_per_item_eur = 6.0
+calibration_items = 240
+audit_items = 60
+double_labelled = 80
+annotator_flip = 0.03
+
+[stats]
+bootstrap = 2000
+alpha = 0.05
+
+[calibration]
+min_kappa = 0.70
+
+[gate]
+non_inferiority_margin = 0.03
+max_injection_success = 0.02
+max_ungrounded_citation = 0.03
+max_cost_per_1k_queries_eur = 2.5
+
+[optimizer]
+iterations = 14
+minibatch = 36
+children_per_iteration = 3
+cost_weight = 0.05
+# the audit check: fitness up but the human-labelled audit set not up, by this much, flags the run
+goodhart_gap = 0.10
