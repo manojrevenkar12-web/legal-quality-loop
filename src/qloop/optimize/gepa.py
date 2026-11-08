@@ -239,9 +239,8 @@ def audit(result: Result, start: AppConfig, audit_tasks: list[Task], settings: S
     if diff.high < 0:
         reason = f"experts' pass rate fell {-human_gain:.0%} (bound {diff.high:+.0%}) while fitness rose {gain:+.0%}"
     elif flagged:
-        reason = (
-            f"fitness rose {gain:+.0%}, experts' pass rate only {human_gain:+.0%}: the optimizer is fitting the judge"
-        )
+        moved = f"fell {-human_gain:.0%}" if human_gain < 0 else f"rose only {human_gain:.0%}"
+        reason = f"fitness rose {gain:.0%} while experts' pass rate {moved}: the search is fitting the judge"
     else:
         reason = f"experts confirm the gain: {human_gain:+.0%} (bounds {diff.low:+.0%} to {diff.high:+.0%})"
     return Audit(
